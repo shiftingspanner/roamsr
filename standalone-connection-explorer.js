@@ -49,14 +49,28 @@
 
 	// Extract eFactor from block's children (looks for "eFactor:: 3.5" pattern)
 	const extractEFactor = (block) => {
-		if (!block.children) return null;
+		// Debug: log block structure to see what we're getting
+		console.log('Block structure:', {
+			uid: block.uid,
+			string: block.string,
+			children: block.children,
+		});
+
+		if (!block.children) {
+			console.log('No children found for block:', block.uid);
+			return null;
+		}
 
 		for (const child of block.children) {
+			console.log('Checking child:', child);
 			const match = child.string?.match(/^eFactor::\s*(\d+\.?\d*)/i);
 			if (match) {
-				return parseFloat(match[1]);
+				const eFactor = parseFloat(match[1]);
+				console.log('Found eFactor:', eFactor, 'in block:', block.uid);
+				return eFactor;
 			}
 		}
+		console.log('No eFactor found in children of block:', block.uid);
 		return null;
 	};
 
@@ -85,17 +99,22 @@
 	// Load high eFactor cards
 	const loadHighEFactorCards = async () => {
 		const query = createQuery();
+		console.log('Running query:', query);
 		const results = await window.roamAlphaAPI.q(query);
+		console.log('Query returned', results.length, 'results');
 
 		const cards = results
 			.map(result => {
 				const res = result[0];
+				console.log('Processing result:', res);
 				const eFactor = extractEFactor(res);
 
 				if (!eFactor || eFactor <= CONFIG.MIN_EFACTOR) {
+					console.log('Filtered out - eFactor:', eFactor, 'threshold:', CONFIG.MIN_EFACTOR);
 					return null;
 				}
 
+				console.log('Card accepted! eFactor:', eFactor);
 				return {
 					uid: res.uid,
 					string: res.string,
@@ -103,6 +122,8 @@
 				};
 			})
 			.filter(card => card !== null);
+
+		console.log('Total cards after filtering:', cards.length);
 
 		// Sort by eFactor (highest first)
 		cards.sort((a, b) => b.eFactor - a.eFactor);
