@@ -178,15 +178,22 @@ const createWidgetContainer = () => {
 	var widgetContainer = Object.assign(document.createElement("div"), {
 		className: "log-button flex-h-box roamsr-widget",
 	});
-	widgetContainer.style.cssText = "align-items: center; justify-content: space-around; padding-top: 8px; height: 47px;";
+	widgetContainer.style.cssText = "align-items: center; justify-content: space-around; padding-top: 8px; height: 70px;";
 	return widgetContainer;
 };
 
 const createWidgetContent = () => {
 	var widgetContent = Object.assign(document.createElement("div"), {
-		className: "flex-h-box roamsr-widget__content",
+		className: "flex-v-box roamsr-widget__content",
 	});
 	widgetContent.style.cssText = "align-items: center; justify-content: space-around; width: 100%;";
+
+	// Top row with review button and counter
+	var topRow = Object.assign(document.createElement("div"), {
+		className: "flex-h-box roamsr-widget__top-row",
+	});
+	topRow.style.cssText = "align-items: center; justify-content: space-around; width: 100%;";
+
 	var reviewButton = Object.assign(document.createElement("div"), {
 		className: "bp3-button bp3-minimal roamsr-widget__review-button",
 		innerHTML: `<span style="padding-right: 8px;"><svg width="16" height="16" version="1.1" viewBox="0 0 4.2333 4.2333" style="color:5c7080;">
@@ -216,7 +223,28 @@ const createWidgetContent = () => {
 	counterContainer.style.cssText = "justify-content: center; width: 50%";
 	counterContainer.append(counter);
 
-	widgetContent.append(reviewButton, counterContainer);
+	topRow.append(reviewButton, counterContainer);
+
+	// Bottom row with connection explorer button
+	var bottomRow = Object.assign(document.createElement("div"), {
+		className: "flex-h-box roamsr-widget__bottom-row",
+	});
+	bottomRow.style.cssText = "align-items: center; justify-content: center; width: 100%; margin-top: 4px;";
+
+	var connectionExplorerButton = Object.assign(document.createElement("div"), {
+		className: "bp3-button bp3-minimal roamsr-widget__connection-explorer-button",
+		innerHTML: `<span style="padding-right: 4px;">🔗</span> EXPLORE CONNECTIONS`,
+		onclick: () => {
+			if (window.roamsr.connectionExplorer) {
+				window.roamsr.connectionExplorer.startSession();
+			}
+		},
+	});
+	connectionExplorerButton.style.cssText = "padding: 2px 8px; font-size: 11px; color: #5C7080;";
+
+	bottomRow.append(connectionExplorerButton);
+
+	widgetContent.append(topRow, bottomRow);
 
 	return widgetContent;
 };

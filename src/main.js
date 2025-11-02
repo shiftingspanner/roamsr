@@ -9,6 +9,7 @@ import { buttonClickHandler } from "./ui/srButton";
 import { standbyState } from "./core/state";
 import { addBasicStyles } from "./ui/styles";
 import { addDelimiter, addWidget } from "./ui/uiElements";
+import { initConnectionExplorer } from "./core/connectionExplorerSession";
 
 export const init = () => {
 	var VERSION = "v1.1.0";
@@ -26,6 +27,7 @@ export const init = () => {
 	loadState(-1).then(() => {
 		addDelimiter();
 		addWidget();
+		initConnectionExplorer();
 	});
 
 	console.log("🗃️ Successfully loaded roam/sr " + VERSION + ".");

@@ -9,6 +9,14 @@ const basicCSS = `
   color: #F5F8FA !important;
 }
 
+.roamsr-widget__connection-explorer-button {
+  color: #5C7080 !important;
+}
+
+.roamsr-widget__connection-explorer-button:hover {
+  color: #F5F8FA !important;
+}
+
 .roamsr-return-button-container {
   z-index: 100000;
   margin: 5px 0px 5px 45px;
