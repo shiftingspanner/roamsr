@@ -47,35 +47,40 @@
 		document.querySelectorAll(selector).forEach(el => el.remove());
 	};
 
-	// Extract eFactor from block's children (looks for "eFactor:: 3.5" pattern)
-	const extractEFactor = (block) => {
-		// Debug: log block structure to see what we're getting
-		console.log('Block structure:', {
-			uid: block.uid,
-			string: block.string,
-			children: block.children,
-		});
+	// Extract eFactor from a block's children (looks for "eFactor:: 3.5" pattern)
+	const extractEFactorFromChildren = (children) => {
+		if (!children) return null;
 
-		if (!block.children) {
-			console.log('No children found for block:', block.uid);
-			return null;
-		}
-
-		for (const child of block.children) {
-			console.log('Checking child:', child);
+		for (const child of children) {
 			const match = child.string?.match(/^eFactor::\s*(\d+\.?\d*)/i);
 			if (match) {
-				const eFactor = parseFloat(match[1]);
-				console.log('Found eFactor:', eFactor, 'in block:', block.uid);
-				return eFactor;
+				return parseFloat(match[1]);
 			}
 		}
-		console.log('No eFactor found in children of block:', block.uid);
 		return null;
 	};
 
-	// Create query for high eFactor cards
-	const createQuery = () => {
+	// Find the highest eFactor from all references to a block
+	const findHighestEFactor = (references) => {
+		if (!references || references.length === 0) return null;
+
+		let maxEFactor = null;
+
+		for (const ref of references) {
+			const eFactor = extractEFactorFromChildren(ref.children);
+			if (eFactor !== null) {
+				console.log('Found eFactor:', eFactor, 'in reference:', ref.uid);
+				if (maxEFactor === null || eFactor > maxEFactor) {
+					maxEFactor = eFactor;
+				}
+			}
+		}
+
+		return maxEFactor;
+	};
+
+	// Create query to find SR blocks and their references
+	const createSRBlocksQuery = () => {
 		const srTagsClause = "(or " + CONFIG.SR_TAGS.map(tag =>
 			`[?srPage :node/title "${tag}"]`
 		).join("\n") + ")";
@@ -85,7 +90,6 @@
 				:block/string
 				:block/uid
 				{:block/refs [:node/title]}
-				{:block/children [:block/string]}
 			])
 			:where
 				${srTagsClause}
@@ -96,32 +100,53 @@
 		]`;
 	};
 
+	// Create query to find all references to a specific block UID
+	const createReferencesQuery = (uid) => {
+		return `[
+			:find (pull ?ref [
+				:block/uid
+				{:block/children [:block/string]}
+			])
+			:where
+				[?card :block/uid "${uid}"]
+				[?ref :block/refs ?card]
+		]`;
+	};
+
 	// Load high eFactor cards
 	const loadHighEFactorCards = async () => {
-		const query = createQuery();
-		console.log('Running query:', query);
-		const results = await window.roamAlphaAPI.q(query);
-		console.log('Query returned', results.length, 'results');
+		// Step 1: Find all SR blocks
+		const srQuery = createSRBlocksQuery();
+		console.log('Finding SR blocks...');
+		const srResults = await window.roamAlphaAPI.q(srQuery);
+		console.log('Found', srResults.length, 'SR blocks');
 
-		const cards = results
-			.map(result => {
-				const res = result[0];
-				console.log('Processing result:', res);
-				const eFactor = extractEFactor(res);
+		const cards = [];
 
-				if (!eFactor || eFactor <= CONFIG.MIN_EFACTOR) {
-					console.log('Filtered out - eFactor:', eFactor, 'threshold:', CONFIG.MIN_EFACTOR);
-					return null;
-				}
+		// Step 2: For each SR block, find its references and extract eFactor
+		for (const result of srResults) {
+			const srBlock = result[0];
+			console.log('Checking SR block:', srBlock.uid, srBlock.string);
 
-				console.log('Card accepted! eFactor:', eFactor);
-				return {
-					uid: res.uid,
-					string: res.string,
+			// Find all references to this SR block
+			const refsQuery = createReferencesQuery(srBlock.uid);
+			const refsResults = await window.roamAlphaAPI.q(refsQuery);
+			console.log('  Found', refsResults.length, 'references');
+
+			const references = refsResults.map(r => r[0]);
+			const eFactor = findHighestEFactor(references);
+
+			if (eFactor !== null && eFactor > CONFIG.MIN_EFACTOR) {
+				console.log('  ✓ Card accepted! eFactor:', eFactor);
+				cards.push({
+					uid: srBlock.uid,
+					string: srBlock.string,
 					eFactor: eFactor,
-				};
-			})
-			.filter(card => card !== null);
+				});
+			} else {
+				console.log('  ✗ Filtered out - eFactor:', eFactor, 'threshold:', CONFIG.MIN_EFACTOR);
+			}
+		}
 
 		console.log('Total cards after filtering:', cards.length);
 
