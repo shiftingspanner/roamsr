@@ -1,6 +1,6 @@
 # Standalone Connection Explorer for Roam Research
 
-A lightweight tool to explore well-learned spaced repetition cards in your knowledge graph.
+A lightweight tool to explore spaced repetition cards with high eFactor values in your knowledge graph.
 
 ## Quick Start
 
@@ -12,23 +12,31 @@ A lightweight tool to explore well-learned spaced repetition cards in your knowl
 
 ## What It Does
 
-The Connection Explorer identifies your **well-learned** spaced repetition cards and displays them one-by-one, allowing you to:
+The Connection Explorer displays cards with **eFactor > 3.0** one-by-one, allowing you to:
 - Explore connections in your knowledge graph
 - Navigate to related blocks
 - Mark explored cards with `#.connected` tag
-- Focus on high-quality content you've already mastered
+- Focus on well-learned content
 
 ## How It Works
 
-Instead of recalculating the eFactor (like the full plugin does), this standalone version uses a **simpler approach**:
+This tool is **extremely simple**:
 
-1. **Examines review history** already stored in your Roam graph
-2. **Calculates quality metrics**:
-   - Total number of reviews
-   - Success rate (percentage of "Good" or "Easy" responses)
-   - Quality score (reviews × success rate)
-3. **Filters cards** based on configurable thresholds
-4. **Displays cards** sorted by quality (best first)
+1. **Reads the eFactor attribute** from your SR card blocks
+2. **Filters cards** with eFactor > 3.0 (configurable)
+3. **Excludes** cards already tagged with `#.connected`
+4. **Displays cards** sorted by eFactor (highest first)
+
+### eFactor Storage Format
+
+The tool looks for an `eFactor` attribute stored as a child block:
+
+```
+- Your SR card question #sr
+  - eFactor:: 3.5
+```
+
+The eFactor value must be stored this way for the tool to find it.
 
 ## Configuration
 
@@ -36,68 +44,101 @@ Edit these values at the top of the script:
 
 ```javascript
 const CONFIG = {
-    MIN_REVIEWS: 5,              // Minimum number of reviews required
-    MIN_SUCCESS_RATE: 0.7,       // Minimum 70% success rate
+    MIN_EFACTOR: 3.0,            // Minimum eFactor value
     SR_TAGS: ["sr"],             // Tags used for spaced repetition
     CONNECTED_TAG: ".connected", // Tag to mark explored cards
-    FLAG_TAG: "f",               // Flagged cards are excluded
 };
 ```
 
 ## Features
 
-- **Self-contained**: No dependencies on the roam/sr plugin
-- **Lightweight**: Only ~488 lines of code
-- **Visual interface**: Clean UI matching Roam's design language
-- **Easy to modify**: All code in one file
-- **Quality-based**: Focuses on your best-reviewed content
+- **Ultra-lightweight**: Only **419 lines** of code (~12KB)
+- **Self-contained**: No dependencies
+- **Simple**: Just reads eFactor from block attributes
+- **Visual interface**: Clean UI matching Roam's design
+- **Easy to customize**: All code in one file
 
-## How Cards Are Scored
+## Usage
 
-- **Reviews**: More reviews = higher score
-- **Success Rate**: % of reviews marked "Good" (r/3) or "Easy" (r/4)
-- **Quality Score**: Reviews × Success Rate
+### Starting a Session
 
-Example:
-- Card A: 10 reviews, 80% success → Score: 8.0
-- Card B: 20 reviews, 60% success → Score: 12.0
-- Card B appears first (higher quality score)
+1. Click "🔗 Explore Connections" in the sidebar
+2. The tool loads all cards with eFactor > 3.0
+3. You'll be taken to the first card (highest eFactor)
 
-## Usage Tips
+### During Exploration
 
-1. **Adjust thresholds** to control which cards appear
-2. **Use the embedded block view** to explore related content
-3. **Mark as Connected** when you've explored the connections
-4. **Skip** cards you want to explore later
-5. Cards marked with `#.connected` won't appear in future sessions
+- **Embedded block view** shows the card in context
+- **Navigate freely** - click links, explore connections
+- **Return button** appears when you navigate away
+- **Mark as Connected** button tags the card with `#.connected`
+- **Skip** button moves to next card without tagging
 
-## Differences from Full Plugin Integration
+### Ending a Session
 
-| Feature | Full Plugin | Standalone |
-|---------|-------------|------------|
-| Size | 74KB, 2322 lines | ~15KB, 488 lines |
-| Installation | Roam Depot / Extension | Paste in code block |
-| Calculation | Full Anki algorithm | Simple heuristic |
-| Dependencies | Requires roam/sr | Fully independent |
-| Customization | Harder to modify | Easy to edit |
-| UI Integration | Sidebar widget | Sidebar widget |
+- Click "✕ End Explorer" in the sidebar
+- Or explore all cards (session auto-ends)
+
+## Why eFactor > 3.0?
+
+In spaced repetition systems:
+- **eFactor = 2.5**: Default starting value
+- **eFactor < 2.5**: Difficult cards
+- **eFactor > 2.5**: Cards you're learning well
+- **eFactor > 3.0**: Cards you consistently answer correctly
+
+Cards with eFactor > 3.0 represent **well-established knowledge** - perfect for exploring deeper connections!
 
 ## Troubleshooting
 
-**No cards found?**
-- Lower `MIN_REVIEWS` (try 3 instead of 5)
-- Lower `MIN_SUCCESS_RATE` (try 0.6 or 0.5)
-- Make sure you have cards tagged with `#sr` (or your configured tag)
-- Ensure cards have review history
+### No cards found?
 
-**Widget doesn't appear?**
+**Check if your cards have eFactor attributes:**
+```
+- Your SR card #sr
+  - eFactor:: 3.5    ← Must be present!
+```
+
+**Try lowering the threshold:**
+```javascript
+MIN_EFACTOR: 2.5,  // Instead of 3.0
+```
+
+**Check your SR tags:**
+```javascript
+SR_TAGS: ["sr", "card"],  // Add your custom tags
+```
+
+### Widget doesn't appear?
+
 - Refresh the page
 - Check browser console for errors
-- Make sure the code is in a `{{[[roam/js]]}}` block
+- Make sure code is in a `{{[[roam/js]]}}` block
 
-**Want to reset?**
-- End the current session
-- Remove `#.connected` tags from blocks you want to see again
+### Want to re-explore cards?
+
+Remove the `#.connected` tag from blocks you want to see again.
+
+## Comparison: Full Plugin vs Standalone
+
+| Feature | Full Plugin | Standalone |
+|---------|-------------|------------|
+| Size | 74KB, 2322 lines | 12KB, 419 lines |
+| Installation | Plugin system | Paste in code block |
+| eFactor Source | Calculates from history | Reads from attribute |
+| Flag Tag Support | Yes | No (removed) |
+| Dependencies | Full roam/sr | None |
+| Customization | Complex | Very easy |
+
+## How to Store eFactor Attributes
+
+If you're using roam/sr or another SR plugin, you may need to configure it to store eFactor values as attributes. Alternatively, you can manually add them to test:
+
+```
+- Test card with high eFactor #sr
+  - eFactor:: 3.5
+  - This is a well-learned card!
+```
 
 ## License
 

@@ -1,17 +1,17 @@
 /**
  * Standalone Connection Explorer for Roam Research
  *
- * Displays spaced repetition blocks one-by-one that are well-learned,
+ * Displays spaced repetition blocks with eFactor > 3.0 one-by-one,
  * allowing you to explore connections in your knowledge graph.
  *
  * Configuration:
- * - MIN_REVIEWS: Minimum number of reviews required (default: 5)
- * - MIN_SUCCESS_RATE: Minimum success rate (Good/Easy responses) (default: 0.7 = 70%)
+ * - MIN_EFACTOR: Minimum eFactor value (default: 3.0)
  * - SR_TAGS: Tags used for spaced repetition (default: ["sr"])
+ * - CONNECTED_TAG: Tag to mark explored blocks (default: ".connected")
  *
  * Usage:
  * 1. Paste this code into a {{[[roam/js]]}} code block
- * 2. Click "Start Connection Explorer" button in the sidebar
+ * 2. Click "🔗 Explore Connections" button in the sidebar
  * 3. Explore each block and click "Mark as Connected" or "Skip"
  */
 
@@ -20,11 +20,9 @@
 
 	// Configuration
 	const CONFIG = {
-		MIN_REVIEWS: 5,
-		MIN_SUCCESS_RATE: 0.7,
+		MIN_EFACTOR: 3.0,
 		SR_TAGS: ["sr"],
 		CONNECTED_TAG: ".connected",
-		FLAG_TAG: "f",
 	};
 
 	// State
@@ -36,10 +34,6 @@
 
 	// Utility Functions
 	const sleep = (ms = 100) => new Promise(resolve => setTimeout(resolve, ms));
-
-	const createUid = () => {
-		return window.roamAlphaAPI.util.generateUID();
-	};
 
 	const goToUid = (uid) => {
 		if (uid) {
@@ -53,66 +47,20 @@
 		document.querySelectorAll(selector).forEach(el => el.remove());
 	};
 
-	// Calculate quality score from review history
-	const calculateCardQuality = (history) => {
-		if (!history || history.length === 0) {
-			return { score: 0, reviews: 0, successRate: 0 };
+	// Extract eFactor from block's children (looks for "eFactor:: 3.5" pattern)
+	const extractEFactor = (block) => {
+		if (!block.children) return null;
+
+		for (const child of block.children) {
+			const match = child.string?.match(/^eFactor::\s*(\d+\.?\d*)/i);
+			if (match) {
+				return parseFloat(match[1]);
+			}
 		}
-
-		const completedReviews = history.filter(h => h.signal);
-		const reviewCount = completedReviews.length;
-
-		if (reviewCount === 0) {
-			return { score: 0, reviews: 0, successRate: 0 };
-		}
-
-		// Count successful reviews (signal 3 = Good, 4 = Easy)
-		const successfulReviews = completedReviews.filter(h =>
-			h.signal === '3' || h.signal === '4'
-		).length;
-
-		const successRate = successfulReviews / reviewCount;
-
-		// Quality score combines review count and success rate
-		const score = reviewCount * successRate;
-
-		return { score, reviews: reviewCount, successRate };
+		return null;
 	};
 
-	// Check if block is a review block
-	const isReviewBlock = (block) => {
-		return block._children &&
-			block._children[0]?.refs?.some(ref => ref.title === "roam/sr/review");
-	};
-
-	// Extract signal from review block (r/1, r/2, r/3, r/4)
-	const extractSignal = (block) => {
-		return block.refs?.[0]?.title?.slice(2);
-	};
-
-	// Convert daily page UID to date
-	const dailyPageUIDToDate = (uid) => {
-		const month = parseInt(uid.slice(0, 2)) - 1;
-		const day = parseInt(uid.slice(2, 4));
-		const year = parseInt(uid.slice(4, 8));
-		return new Date(year, month, day);
-	};
-
-	// Extract history from query result
-	const extractHistory = (result) => {
-		if (!result._refs) return [];
-
-		return result._refs
-			.filter(isReviewBlock)
-			.map(block => ({
-				date: dailyPageUIDToDate(block.page.uid),
-				signal: extractSignal(block),
-				uid: block.uid,
-			}))
-			.sort((a, b) => a.date - b.date);
-	};
-
-	// Create query for well-learned cards
+	// Create query for high eFactor cards
 	const createQuery = () => {
 		const srTagsClause = "(or " + CONFIG.SR_TAGS.map(tag =>
 			`[?srPage :node/title "${tag}"]`
@@ -123,13 +71,7 @@
 				:block/string
 				:block/uid
 				{:block/refs [:node/title]}
-				{:block/_refs [
-					:block/uid
-					:block/string
-					{:block/_children [:block/uid {:block/refs [:node/title]}]}
-					{:block/refs [:node/title]}
-					{:block/page [:block/uid]}
-				]}
+				{:block/children [:block/string]}
 			])
 			:where
 				${srTagsClause}
@@ -137,38 +79,33 @@
 				(not-join [?card]
 					[?connectedPage :node/title "${CONFIG.CONNECTED_TAG}"]
 					[?card :block/refs ?connectedPage])
-				(not-join [?card]
-					[?flagPage :node/title "${CONFIG.FLAG_TAG}"]
-					[?card :block/refs ?flagPage])
 		]`;
 	};
 
-	// Load well-learned cards
-	const loadWellLearnedCards = async () => {
+	// Load high eFactor cards
+	const loadHighEFactorCards = async () => {
 		const query = createQuery();
 		const results = await window.roamAlphaAPI.q(query);
 
 		const cards = results
 			.map(result => {
 				const res = result[0];
-				const history = extractHistory(res);
-				const quality = calculateCardQuality(history);
+				const eFactor = extractEFactor(res);
+
+				if (!eFactor || eFactor <= CONFIG.MIN_EFACTOR) {
+					return null;
+				}
 
 				return {
 					uid: res.uid,
 					string: res.string,
-					history: history,
-					quality: quality,
+					eFactor: eFactor,
 				};
 			})
-			.filter(card =>
-				card.uid &&
-				card.quality.reviews >= CONFIG.MIN_REVIEWS &&
-				card.quality.successRate >= CONFIG.MIN_SUCCESS_RATE
-			);
+			.filter(card => card !== null);
 
-		// Sort by quality score (highest first)
-		cards.sort((a, b) => b.quality.score - a.quality.score);
+		// Sort by eFactor (highest first)
+		cards.sort((a, b) => b.eFactor - a.eFactor);
 
 		return cards;
 	};
@@ -297,10 +234,6 @@
 		}
 	};
 
-	const removeWidget = () => {
-		removeSelector('.ce-widget');
-	};
-
 	const addContainer = () => {
 		if (document.querySelector('.ce-container')) return;
 
@@ -317,9 +250,7 @@
 		info.className = 'ce-info';
 		info.innerHTML = `
 			<div class="ce-info-secondary">Card ${explorerState.currentIndex + 1} of ${explorerState.cards.length}</div>
-			<div class="ce-info-primary">
-				${card.quality.reviews} reviews · ${(card.quality.successRate * 100).toFixed(0)}% success rate
-			</div>
+			<div class="ce-info-primary">eFactor: ${card.eFactor.toFixed(2)}</div>
 		`;
 
 		const buttons = document.createElement('div');
@@ -385,10 +316,10 @@
 			widget.innerHTML = '⏳ Loading...';
 			widget.onclick = null;
 
-			const cards = await loadWellLearnedCards();
+			const cards = await loadHighEFactorCards();
 
 			if (cards.length === 0) {
-				alert(`No well-learned cards found.\n\nCriteria:\n- At least ${CONFIG.MIN_REVIEWS} reviews\n- At least ${(CONFIG.MIN_SUCCESS_RATE * 100).toFixed(0)}% success rate\n- Not already tagged with #${CONFIG.CONNECTED_TAG}`);
+				alert(`No high eFactor cards found.\n\nLooking for:\n- Cards tagged with #${CONFIG.SR_TAGS.join(' or #')}\n- With eFactor > ${CONFIG.MIN_EFACTOR}\n- Not tagged with #${CONFIG.CONNECTED_TAG}\n\nNote: Cards must have "eFactor:: X.X" as a child block.`);
 				widget.innerHTML = originalContent;
 				widget.onclick = startSession;
 				return;
@@ -398,7 +329,7 @@
 			explorerState.currentIndex = 0;
 			explorerState.isActive = true;
 
-			console.log(`Found ${cards.length} well-learned cards.`);
+			console.log(`Found ${cards.length} high eFactor cards.`);
 
 			widget.innerHTML = '✕ End Explorer';
 			widget.onclick = endSession;
